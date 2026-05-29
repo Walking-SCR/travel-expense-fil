@@ -5,8 +5,9 @@ last_trip.json
 # 运行配置（每人环境不同）
 config.json
 
-# Antigravity 框架配置（非本工具核心）
+# Antigravity / Gemini 框架配置（非本工具核心）
 .agent/
+GEMINI.md
 
 # 测试数据（包含真实票据信息）
 assets/
