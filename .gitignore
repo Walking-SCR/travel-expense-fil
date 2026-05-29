@@ -1,0 +1,23 @@
+# 个人数据（每人不同，需自行配置）
+personal_info.json
+last_trip.json
+
+# 运行配置（每人环境不同）
+config.json
+
+# 测试数据（包含真实票据信息）
+assets/
+evals/
+eval-viewer/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
