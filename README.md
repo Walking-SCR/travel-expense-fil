@@ -22,6 +22,67 @@
 pip install -r requirements.txt
 ```
 
+## 初始化配置
+
+首次使用前需要配置以下三个文件。
+
+### `config.json` — 运行配置
+
+控制 PDF 解析方式和图片票据处理策略：
+
+```json
+{
+  "version": 1,
+  "execution_mode": "manual",
+  "pdf_parser": {
+    "tool": "pymupdf",
+    "auto_install": true
+  },
+  "image_parser": {
+    "mcp_available": false,
+    "mcp_tool_name": null,
+    "fallback_to_manual": true
+  }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `execution_mode` | `manual` 或 `cli`，控制脚本交互方式 |
+| `pdf_parser.tool` | PDF 解析引擎（默认 `pymupdf`，首次运行自动安装） |
+| `pdf_parser.auto_install` | 是否自动安装 PyMuPDF |
+| `image_parser.mcp_available` | 是否配置了图片 MCP 工具（如 MiniMax） |
+| `image_parser.mcp_tool_name` | MCP 工具名称 |
+| `image_parser.fallback_to_manual` | 无 MCP 时是否降级手动输入金额 |
+
+> 配置文件被 `.gitignore` 排除，修改不会影响仓库。
+
+### `personal_info.json` — 个人信息
+
+```json
+{
+  "name": "你的姓名",
+  "emp_id": "工号",
+  "manager": "汇报对象",
+  "base_city": "所在城市"
+}
+```
+
+### `last_trip.json` — 项目信息
+
+每次出差可能不同，运行前根据需要更新：
+
+```json
+{
+  "project_code": "项目编号",
+  "project_name": "项目名称",
+  "project_status": "售前",
+  "project_manager": "项目经理"
+}
+```
+
+---
+
 ## 在 Claude Code 中使用
 
 本工具可以作为 **Claude Code Skill** 使用，让 Claude 帮你自动完成报销填写。
@@ -66,42 +127,6 @@ Claude 会自动：
   }
 }
 ```
-
----
-
-## 配置文件
-
-### `config.json` — 运行配置
-
-| 字段 | 说明 |
-|------|------|
-| `pdf_parser.tool` | PDF 解析工具（默认 `pymupdf`） |
-| `pdf_parser.auto_install` | 是否自动安装 PyMuPDF |
-| `image_parser.mcp_available` | 是否配置了图片 MCP 工具 |
-| `image_parser.fallback_to_manual` | 无 MCP 时是否降级手动输入 |
-
-### `personal_info.json` — 个人信息（必须配置）
-
-```json
-{
-  "name": "你的姓名",
-  "emp_id": "工号",
-  "manager": "汇报对象",
-  "base_city": "所在城市"
-}
-```
-
-### `last_trip.json` — 项目信息（每次生成时可更新）
-
-```json
-{
-  "project_code": "项目编号",
-  "project_name": "项目名称",
-  "project_status": "售前",
-  "project_manager": "项目经理"
-}
-```
-
 ## 用法
 
 ### 快速入门
