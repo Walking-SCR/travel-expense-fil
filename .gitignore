@@ -14,6 +14,11 @@ assets/
 evals/
 eval-viewer/
 
+# 内部开发 / 评测工具（非核心功能）
+agents/
+references/bugfix_list.md
+references/iteration-log.md
+
 # Python 缓存
 __pycache__/
 *.pyc
