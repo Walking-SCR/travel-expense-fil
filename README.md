@@ -22,6 +22,53 @@
 pip install -r requirements.txt
 ```
 
+## 在 Claude Code 中使用
+
+本工具可以作为 **Claude Code Skill** 使用，让 Claude 帮你自动完成报销填写。
+
+### 安装方式
+
+将本仓库克隆到 Claude Code 的 skills 目录：
+
+```bash
+# 进入 Claude Code skills 目录（如不存在则创建）
+mkdir -p ~/.claude/skills/productivity
+cd ~/.claude/skills/productivity
+
+# 克隆仓库
+git clone https://github.com/Walking-SCR/travel-expense-fil.git
+```
+
+### 使用方法
+
+在 Claude Code 对话中，放入出差票据 PDF 文件后，输入以下触发词即可：
+
+> 填写差旅报销
+> 报销填写
+> 生成差旅费报告
+
+Claude 会自动：
+1. 引导你提供项目信息、补贴标准、加班日期等
+2. 调用脚本解析 PDF 票据
+3. 计算补贴金额
+4. 生成标准格式的 Excel 报销单
+
+### 写入 CLAUDE.md 或 settings.json
+
+你也可以在项目级的 `CLAUDE.md` 或 `settings.json` 中注册 trigger 词，让 Claude 自动识别报销任务：
+
+```json
+{
+  "skills": {
+    "travel-expense-fill": {
+      "trigger": "填写差旅报销|报销填写|生成差旅费报告|travel-expense"
+    }
+  }
+}
+```
+
+---
+
 ## 配置文件
 
 ### `config.json` — 运行配置
@@ -170,7 +217,7 @@ print(classified)
 1. **PDF 发票文件**放在一个目录中，脚本会自动发现携程、滴滴、火车票、大巴票
 2. **图片票据**目前需手动输入金额（通过 `--bus` / `--train` 参数）
 3. **项目信息**每次出差可能不同，通过 `--project-*` 参数或更新 `last_trip.json`
-4. 详细开发文档见 `references/bugfix_list.md` 和 `references/column-mappings.md`
+4. 详细列映射说明见 `references/column-mappings.md`
 
 ## License
 
