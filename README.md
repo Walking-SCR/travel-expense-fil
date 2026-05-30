@@ -11,6 +11,10 @@
 - 🔄 **中断返程检测** — 自动识别出差中途回公司的情况，拆分区间
 - 📊 **Excel 自动生成** — 直接操作模板 XML，保留模板原始样式，输出差旅费 + Base地交通费两张表
 
+<img width="1024" height="1024" alt="travel_expense_skill_workflow_1780150157262" src="https://github.com/user-attachments/assets/1498130e-6e77-4ada-8820-392864350c9f" />
+
+
+
 ## 环境要求
 
 - Python ≥ 3.9
