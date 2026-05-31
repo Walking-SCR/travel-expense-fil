@@ -81,19 +81,32 @@ def _daily_subsidy(d, start, end, tier, std, overtime_dates):
 
 def collect_overtime_dates(merged_trips):
     """
-    收集出差区间内所有「加班会影响补贴」的日期。
+    收集出差区间内所有周末日期（加班会影响补贴）。
 
-    包括出发日、结束日和中间周末。用户确认哪些日期有加班后，
-    传给 compute_daily_subsidy；这些日期会按 100% 标准计算。
+    仅收集周六/周日。工作日出发/结束日不需要加班确认——
+    无加班时已按 50% 计算，有加班才会影响。
+
+    如果区间不涉及周六、日，返回空 set，调用方应跳过加班询问。
     """
     overtime = set()
     for t in merged_trips:
         cur = t["start"]
         while cur <= t["end"]:
-            if cur in (t["start"], t["end"]) or cur.weekday() in (5, 6):
+            if cur.weekday() in (5, 6):
                 overtime.add(cur)
             cur += timedelta(days=1)
     return overtime
+
+
+def has_weekends_in_trips(merged_trips):
+    """判断出差区间是否包含周末。返回 True 表示有周末。"""
+    for t in merged_trips:
+        cur = t["start"]
+        while cur <= t["end"]:
+            if cur.weekday() in (5, 6):
+                return True
+            cur += timedelta(days=1)
+    return False
 
 
 def parse_overtime_reply(reply_text, year=2026):

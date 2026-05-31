@@ -37,6 +37,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 
 import parse_trip, parse_ticket, parse_didi, calc_subsidy, fill_trip_xlsx, fill_base_xlsx, adjust_trip
+from parse_didi import parse_all_rides, classify_didi
 
 SKILL_DIR = Path(__file__).parent.parent
 CONFIG_PATH = SKILL_DIR / 'config.json'
@@ -152,8 +153,11 @@ def _load_config():
     return config
 
 
-def init():
+def init(interactive=True):
     """Skill initialization: ensure config, check dependencies, detect MCP.
+
+    Args:
+        interactive: 是否允许交互式选择执行模式。
 
     Returns:
         dict: Loaded config (merged with defaults).
@@ -181,6 +185,32 @@ def init():
         print('   检测到图片时将回退到手动输入')
         print('   如需配置，编辑 config.json 的 image_parser 字段')
         print('   或联系管理员配置 MCP server 后在 config 中启用')
+
+    # ── 执行模式选择 ──
+    current_mode = config.get('execution_mode', 'manual')
+    if interactive:
+        print(f'\n📋 当前执行模式: {current_mode}')
+        print()
+        print('请选择执行模式:')
+        print('  1. CLI 模式    — 一条命令带全部参数，零交互，适合自动化/Claude Code')
+        print('  2. Manual 模式 — 逐步调用脚本、逐步确认，适合首次使用/不确定参数')
+        try:
+            ans = input(f'请输入 (1/2, 默认{"1" if current_mode == "cli" else "2"}): ').strip()
+        except (EOFError, KeyboardInterrupt):
+            ans = ''
+        if ans == '1':
+            config['execution_mode'] = 'cli'
+        elif ans == '2':
+            config['execution_mode'] = 'manual'
+        else:
+            config['execution_mode'] = current_mode  # 保持原值
+
+        if config['execution_mode'] != current_mode:
+            with open(CONFIG_PATH, 'w') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            print(f'   ✅ 执行模式已更新: {config["execution_mode"]}')
+    else:
+        print(f'\n📋 执行模式: {current_mode}')
 
     print(f'\n📁 技能目录: {SKILL_DIR}')
     print(f'📄 配置文件: {CONFIG_PATH}')
@@ -243,20 +273,31 @@ def generate(work_dir, year=None, month=None, pi=None, base_city=None,
     for t in trips:
         print(f'  {t["start"]}~{t["end"]} {t["from_city"]}->{t["to_city"]}')
 
-    # ══ 2. 滴滴行程单 ══
-    didi_pdfs = sorted(work_dir.glob('滴滴出行行程报销单*.pdf'))
-    all_didi = parse_didi.parse_all_didi([str(p) for p in didi_pdfs], default_year=year)
+    # ══ 2. 打车行程单（滴滴 + 通用平台 + 通行费匹配）══
+    ride_patterns = ['*滴滴*.pdf', '*出行*.pdf', '*打车*.pdf', '*行程单*.pdf']
+    ride_pdfs = set()
+    for pat in ride_patterns:
+        ride_pdfs.update(work_dir.glob(pat))
+    # 加上通行费 PDF（parse_all_rides 会自动识别并匹配到打车行程）
+    ride_pdfs.update(work_dir.glob('EX_ESAA*.pdf'))
+    # 排除已识别的携程文件
+    ride_pdfs -= set(trip_pdfs)
+    ride_pdfs = sorted(ride_pdfs)
+
+    all_didi = parse_all_rides([str(p) for p in ride_pdfs], default_year=year)
 
     # ══ 3. 分类（Base地 vs 出差地）══
-    base_classified = parse_didi.classify_didi(all_didi, trips, base_city)
+    base_classified = classify_didi(all_didi, trips, base_city)
     base_amounts = base_classified.get('base', {})
     didi_trip_data = base_classified.get('trip', {})
-    print(f'\nBase地滴滴: {len(base_amounts)} 笔')
-    for d, info in sorted(base_amounts.items()):
-        print(f'  {d} {info["from"]}->{info["to"]} {info["amount"]}')
-    print(f'出差地滴滴: {len(didi_trip_data)} 笔')
+    print(f'\nBase地打车: {sum(len(v) if isinstance(v, list) else 1 for v in base_amounts.values())} 笔')
+    for d, val in sorted(base_amounts.items()):
+        entries = val if isinstance(val, list) else [val]
+        for info in entries:
+            print(f'  {d} {info["from"]}→{info["to"]} {info["amount"]}')
+    print(f'出差地打车: {len(didi_trip_data)} 笔')
     for d, info in sorted(didi_trip_data.items()):
-        print(f'  {d} {info["from"]}->{info["to"]} {info["amount"]}')
+        print(f'  {d} {info["from"]}→{info["to"]} {info["amount"]}')
 
     # ══ 4. 大巴票（PDF）══
     bus_amounts = {}
@@ -310,7 +351,7 @@ def generate(work_dir, year=None, month=None, pi=None, base_city=None,
         for i, t in enumerate(trips):
             print(f'  {i+1}. {t["start"]}~{t["end"]} {t["from_city"]}->{t["to_city"]} | {t.get("reason", "出差")}')
         print('\n差旅补贴标准:')
-        print('  A. 标准一：公司统一订酒店（一类60/二类50/三类40元/天）')
+        print('  A. 标准一：公司订统一酒店（一类60/二类50/三类40元/天）')
         print('  B. 标准二：自行解决住宿（一类220/二类180/三类145元/天）')
         ans = input('请选择 (A/B, 默认B): ').strip().lower()
         selected_standard = 1 if ans == 'a' else 2
@@ -356,7 +397,7 @@ def generate(work_dir, year=None, month=None, pi=None, base_city=None,
     for t in trips:
         print(f'  {t["start"]}~{t["end"]} {t["from_city"]}->{t["to_city"]}')
 
-    # ══ 4e. 周末加班检测 ══
+    # ══ 4e. 周末加班检测（仅当出差区间包含周六/日时才询问）══
     overtime_set = None
     if overtime_dates:
         overtime_set = set()
@@ -365,7 +406,7 @@ def generate(work_dir, year=None, month=None, pi=None, base_city=None,
             parts = d_str.split('-')
             overtime_set.add(date_cls(int(parts[0]), int(parts[1]), int(parts[2])))
         print(f'📅 加班日期: {sorted(overtime_set)}')
-    else:
+    elif calc_subsidy.has_weekends_in_trips(trips):
         candidate_dates = calc_subsidy.collect_overtime_dates(trips)
         if candidate_dates:
             print('ℹ️ 以下日期若有加班会影响补贴，如有请用 --overtime-dates 指定:')
@@ -450,7 +491,7 @@ def main():
     args = parser.parse_args()
 
     if args.init:
-        init()
+        init(interactive=not args.non_interactive)
         return 0
 
     if not args.dir:

@@ -3,6 +3,8 @@ fill_base_xlsx.py — 填写 Base 地交通费 Excel（xlsx_edit 重写版）
 
 直接用 xlsx_edit 操作 XML，不走 openpyxl save，
 100% 保留模板原始结构（namespace、phoneticPr、calcChain.xml、mergeCells 等）。
+
+支持同日多笔行程（base_amounts[d] 为列表时每条独立成行）。
 """
 import sys
 from datetime import datetime as dt
@@ -14,9 +16,14 @@ from utils import get_template
 
 
 def fill_base_xlsx(out_path, base_amounts, pi, project_info=None):
-    """填写「Base地交通费」Excel。"""
+    """填写「Base地交通费」Excel。
+
+    base_amounts 支持两种格式：
+      - 旧格式: {date: {"amount": x, "from": x, "to": x}}
+      - 新格式: {date: [{"amount": x, "from": x, "to": x}, ...]}
+    """
     if not base_amounts:
-        print("ℹ️ 无Base地滴滴行程，跳过生成Base地交通费表格")
+        print("ℹ️ 无Base地打车行程，跳过生成Base地交通费表格")
         return None
 
     template_path = get_template("Base地交通费-template.xlsx")
@@ -27,9 +34,20 @@ def fill_base_xlsx(out_path, base_amounts, pi, project_info=None):
     pj = project_info or pi
 
     BASE_ROW = 9
-    base_days = len(base_amounts)
-    sorted_dates = sorted(base_amounts.keys())
-    total_row = BASE_ROW + base_days  # will be actual position after renumber
+
+    # ── 展平为 entries 列表 ──
+    entries = []
+    for d in sorted(base_amounts.keys()):
+        val = base_amounts[d]
+        if isinstance(val, list):
+            for info in val:
+                entries.append((d, info))
+        else:
+            # 兼容旧格式
+            entries.append((d, val))
+
+    total_entries = len(entries)
+    total_row = BASE_ROW + total_entries
 
     # ══ 一、表头填写 ══
     ed.set_cell_text(2, 'B2', pi.get('name') or '无')
@@ -48,9 +66,8 @@ def fill_base_xlsx(out_path, base_amounts, pi, project_info=None):
     ed.clear_rows(2, BASE_ROW, 40)
 
     # ══ 四、填数据行 ══
-    for i, d in enumerate(sorted_dates):
+    for i, (d, info) in enumerate(entries):
         row = BASE_ROW + i
-        info = base_amounts[d]
 
         ed.set_cell_date(2, f'A{row}', dt(d.year, d.month, d.day))
         ed.set_cell_text(2, f'B{row}', info.get('from') or '无')
@@ -63,7 +80,7 @@ def fill_base_xlsx(out_path, base_amounts, pi, project_info=None):
         ed.merge_cells(2, f'D{row}:E{row}')
 
     # ══ 五、自动换行 + 自适应行高（数据行整行）══
-    for i in range(base_days):
+    for i in range(total_entries):
         row = BASE_ROW + i
         for col in ('A', 'B', 'C', 'D', 'E', 'F'):
             ed.set_cell_wrap(2, f'{col}{row}')
@@ -71,16 +88,15 @@ def fill_base_xlsx(out_path, base_amounts, pi, project_info=None):
 
     # ══ 六、合计行（先写在模板 Row 40，delete_rows 会重编号到 total_row）══
     ed.set_cell_text(2, 'A40', '合计')
-    ed.set_cell_formula(2, 'F40', f'=SUM(F{BASE_ROW}:F{BASE_ROW + base_days - 1})')
+    ed.set_cell_formula(2, 'F40', f'=SUM(F{BASE_ROW}:F{BASE_ROW + total_entries - 1})')
     ed.merge_cells(2, 'D40:E40')
 
     # ══ 七、删除多余行（重编号合计行 40 → total_row）══
-    if base_days < 31:
-        # 删除数据行末尾与合计行之间的空隙行
-        ed.delete_rows(2, BASE_ROW + base_days, 40 - (BASE_ROW + base_days))
+    if total_entries < 31:
+        ed.delete_rows(2, BASE_ROW + total_entries, 40 - (BASE_ROW + total_entries))
 
     ed.strip_calc_chain()
     ed.flush_all()
     print(f"✅ Base地交通费已生成: {out_path}")
-    print(f"   数据天数={base_days}，数据行={BASE_ROW}~{BASE_ROW+base_days-1}，合计行=Row {total_row}")
+    print(f"   行程数={total_entries}，数据行={BASE_ROW}~{BASE_ROW+total_entries-1}，合计行=Row {total_row}")
     return out_path

@@ -1,6 +1,6 @@
 ---
 name: travel-expense-fill-v3
-description: 根据携程商旅 PDF、滴滴行程单、火车票/大巴票生成差旅报销 Excel。触发词：填写差旅报销、travel-expense-fill-v3、报销填写、生成差旅费报告、个人费用报告。
+description: 根据携程商旅 PDF、打车行程单、火车票/大巴票生成差旅报销 Excel。触发词：填写差旅报销、travel-expense-fill-v3、报销填写、生成差旅费报告、个人费用报告。
 trigger: "携程PDF+报销|填写差旅报销|travel-expense-fill-v3|生成差旅费报告|差旅费报销|报销填写|个人费用报告"
 validator:
   - 必须处理至少一个携程PDF
@@ -27,7 +27,7 @@ validator:
 | 脚本 | 作用 |
 |------|------|
 | `scripts/parse_trip.py` | 携程 PDF 解析 + 多区间合并 |
-| `scripts/parse_didi.py` | 滴滴行程单解析（Y 坐标分组法） |
+| `scripts/parse_didi.py` | 打车行程单解析（Y 坐标分组法） |
 | `scripts/parse_ticket.py` | 火车票/大巴票 PDF 解析 |
 | `scripts/calc_subsidy.py` | 补贴计算 + 加班日期解析 |
 | `scripts/adjust_trip.py` | 出差区间中断返程检测与拆分 |
@@ -55,8 +55,17 @@ validator:
 ### Step 0 初始化（首次使用）
 
 1. 运行 `gen_trip_reports.py --init` 检查依赖
-2. 确认 `personal_info.json` 包含 `name, emp_id, manager, base_city`
-3. 确认 `last_trip.json` 包含 `project_code, project_name, project_status, project_manager`
+2. 选择执行模式（init 会交互询问）：
+
+| 模式 | 优点 | 缺点 | 适用场景 |
+|------|------|------|----------|
+| **CLI 模式** | 一键生成、零交互、适合自动化 | 需提前收集所有参数 | Claude Code、重复报销 |
+| **Manual 模式** | 逐步确认、灵活调整 | 需要多步交互 | 首次使用、不确定参数 |
+
+→ 选择后自动写入 `config.json` 的 `execution_mode`。
+
+3. 确认 `personal_info.json` 包含 `name, emp_id, manager, base_city`
+4. 确认 `last_trip.json` 包含 `project_code, project_name, project_status, project_manager`
    > 项目信息可填 `"无"`，不影响报销单生成。
 
 ### Step 1 预收集信息
@@ -65,7 +74,7 @@ validator:
 
 - 是否延用 `last_trip.json` 的项目信息；项目变化时只更新 `last_trip.json`，不要写入 `personal_info.json`。
 - 补贴标准：`1` = 公司统一订酒店；`2` = 自行解决住宿。
-- 加班日期：出发日、结束日、周末如果有加班，会按 100% 补贴；格式用 `YYYY-MM-DD,YYYY-MM-DD`。
+- 加班日期：仅当出差区间包含周六/日时才需要确认；周末有加班按 100% 补贴，格式用 `YYYY-MM-DD,YYYY-MM-DD`。
 - 图片票据或解析失败票据的日期和金额。
 
 ### Step 2 生成报销表
@@ -101,15 +110,17 @@ python3 scripts/gen_trip_reports.py \
 3. 补贴标准  
 把用户确认的 `standard`（1 或 2）写回每个 merged 区间；没有明确答复时默认标准二。
 
-4. 滴滴解析与分类  
-`parse_didi.parse_all_didi(pdf_paths: list[str], default_year=int) → list[dict]`
+4. 打车解析与分类  
+`parse_didi.parse_all_rides(pdf_paths: list[str], default_year=int) → list[dict]`
 `result = parse_didi.classify_didi(didi_list, merged, base_city) → {trip, base, unknown}`
+
+> 支持滴滴、阳光出行、呼我出行（百度打车）等平台。高速通行费电子行程单自动匹配到对应打车行程。
 
 5. 中断返程检测  
 `adjust_trip.process_trip_interruptions(merged, train_fares, bus_fares, didi_trip, base_didi) → (adjusted, questions)`；拆分后各子区间独立计算补贴。若用户确认提前结束，保留 `q['sub_trips_built']`；若否，补上 `last_return + 1` 到原结束日的区间。
 
 6. 加班确认与补贴计算  
-`calc_subsidy.collect_overtime_dates(merged)` 收集出发日、结束日和周末候选日期；用 `parse_overtime_reply()` 解析用户回复，再调用 `compute_daily_subsidy()`。
+`calc_subsidy.has_weekends_in_trips(merged)` 判断是否涉及周末；仅当有周末时调用 `collect_overtime_dates(merged)` 收集候选日期。用 `parse_overtime_reply()` 解析用户回复，再调用 `compute_daily_subsidy()`。
 
 7. 填写 Excel  
 `fill_trip_xlsx.fill_trip_xlsx(...)` 生成差旅费表；仅当 `base_amounts` 有数据时调用 `fill_base_xlsx.fill_base_xlsx(...)`。
@@ -129,22 +140,17 @@ python3 scripts/gen_trip_reports.py \
 - [ ] 确认目标 sheet 和模板行列没有错位
 - [ ] 合并格按脚本当前策略处理，写值只写左上角锚点
 
-## ⚠️ 已知修复（勿回退）
-
-> 详细根因分析见 `references/bugfix_list.md`（P1~P70）。修改代码前必读。
-
 ## 注意事项
 
-1. **滴滴解析**：必须用 `parse_didi.py` 的 Y 坐标分组法（不能用纯行匹配）
-2. **火车票/大巴票**：只填入出差区间内的票据
-3. **多区间合并**：间隔 ≤1 天视为连续区间
-4. **日期写入**：用 `datetime` 对象（不要用 `date` 对象）
-5. **表头不修改**：Row 1-9 保持模板原样
+1. **打车解析**：优先用滴滴 Y 坐标分组法，失败降级通用解析器；通行费按时间自动匹配
+2. **Base地交通费**：同日多笔行程会独立成行（如早晚各一趟往返高铁站）
+3. **火车票/大巴票**：只填入出差区间内的票据
+4. **多区间合并**：间隔 ≤1 天视为连续区间
+5. **日期写入**：用 `datetime` 对象（不要用 `date` 对象）
+6. **表头不修改**：Row 1-9 保持模板原样
 
 ## 参考资料
 
 | 文件 | 内容 |
 |------|------|
-| `references/bugfix_list.md` | P1~P70 完整根因分析 |
 | `references/column-mappings.md` | 差旅费/Base地模板列映射 |
-| `references/iteration-log.md` | 版本迭代记录 |

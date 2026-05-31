@@ -28,7 +28,20 @@ pip install -r requirements.txt
 
 ## 初始化配置
 
-首次使用前需要配置以下三个文件。
+首次使用前运行初始化命令，按提示选择模式并配置个人信息：
+
+```bash
+python3 scripts/gen_trip_reports.py --init
+```
+
+初始化会检查依赖、让你选择执行模式，并生成 `config.json`。
+
+### 执行模式
+
+| 模式 | 优点 | 缺点 | 适用场景 |
+|------|------|------|----------|
+| **CLI 模式** | 一键生成、零交互 | 需提前收集所有参数 | 自动化、Claude Code |
+| **Manual 模式** | 逐步确认、灵活调整 | 需多步交互 | 首次使用、不确定参数 |
 
 ### `config.json` — 运行配置
 
@@ -52,7 +65,7 @@ pip install -r requirements.txt
 
 | 字段 | 说明 |
 |------|------|
-| `execution_mode` | `manual` 或 `cli`，控制脚本交互方式 |
+| `execution_mode` | `cli` 或 `manual`，由 `--init` 交互选择 |
 | `pdf_parser.tool` | PDF 解析引擎（默认 `pymupdf`，首次运行自动安装） |
 | `pdf_parser.auto_install` | 是否自动安装 PyMuPDF |
 | `image_parser.mcp_available` | 是否配置了图片 MCP 工具（如 MiniMax） |
