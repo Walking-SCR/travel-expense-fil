@@ -58,12 +58,22 @@ def parse_train_ticket(pdf_path):
     """
     text = _extract_pdf_text(pdf_path)
 
-    # 日期：优先匹配出发时间
-    dm = re.search(r'出发时间[：:]\s*(\d{4})年(\d{1,2})月(\d{1,2})日', text)
+    # 日期：优先行程日期（带发车时间），其次出发时间，跳过开票日期
+    # 1. "2026年03月25日\n22:00开" — 行程日期 + 发车时间
+    dm = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日\s*\n?\s*(\d{2}:\d{2})', text)
+    if not dm:
+        # 2. "出发时间：2025年12月06日"
+        dm = re.search(r'出发时间[：:]\s*(\d{4})年(\d{1,2})月(\d{1,2})日', text)
     if not dm:
         dm = re.search(r'开乘日期[：:]\s*(\d{4})年(\d{1,2})月(\d{1,2})日', text)
     if not dm:
-        dm = re.search(r'(\d{4})年(\d{1,2})月(\d{1,2})日', text)
+        # 3. 所有 YYYY年MM月DD日，但跳过"开票日期"前缀的
+        for m in re.finditer(r'(\d{4})年(\d{1,2})月(\d{1,2})日', text):
+            before = text[max(0, m.start()-12):m.start()]
+            if '开票' in before:
+                continue
+            dm = m
+            break
     if not dm:
         dm = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', text)
 
@@ -73,12 +83,12 @@ def parse_train_ticket(pdf_path):
         ticket_date = None
         print(f"  ⚠️ 火车票日期解析失败: {Path(pdf_path).name}")
 
-    # 金额：优先找「票价」字段
-    am = re.search(r'票价[：:]\s*[¥￥]?\s*(\d+\.?\d*)', text)
+    # 金额：优先 ¥/￥ 符号，其次「票价」字段
+    am = re.search(r'[¥￥]\s*(\d+\.?\d*)', text)
     if not am:
-        am = re.search(r'¥\s*(\d+\.?\d*)', text)
+        am = re.search(r'票价[：:]?\s*[\s\S]*?[¥￥]\s*(\d+\.?\d*)', text)
     if not am:
-        am = re.search(r'(\d{3,}\.\d{2})', text)  # 三位数以上（如 325.00）
+        am = re.search(r'(\d{2,}\.\d{2})', text)  # 两位及以上整数 + 小数
 
     if am:
         amount = float(am.group(1))

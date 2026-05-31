@@ -320,10 +320,26 @@ def generate(work_dir, year=None, month=None, pi=None, base_city=None,
         if d not in rich_bus_fares:
             rich_bus_fares[d] = amt
 
-    # ══ 4b. 高铁票（图片与PDF）══
+    # ══ 4b. 高铁票（文件名匹配 + 内容检测）══
     train_fares = {}
     rich_train_fares = {}
     train_pdfs = sorted(work_dir.glob('*火车*.pdf')) + sorted(work_dir.glob('*高铁*.pdf')) + sorted(work_dir.glob('*12306*.pdf'))
+
+    # ── 内容检测：扫描尚未归类的 PDF，识别铁路电子客票 ──
+    already_categorized = set(trip_pdfs) | set(ride_pdfs) | set(bus_pdfs) | set(train_pdfs)
+    all_pdfs = set(work_dir.glob('*.pdf'))
+    uncertain_pdfs = all_pdfs - already_categorized
+    for pdf in sorted(uncertain_pdfs):
+        try:
+            doc = fitz.open(str(pdf))
+            text = doc[0].get_text()
+            doc.close()
+            if any(kw in text for kw in ['铁路电子客票', '中国铁路', '电子发票（铁路', '火车票']):
+                train_pdfs.append(pdf)
+                print(f"  🔍 内容识别为火车票: {pdf.name}")
+        except Exception:
+            pass
+
     # 去重
     train_pdfs = sorted(list(set(train_pdfs)))
     for pdf in train_pdfs:
