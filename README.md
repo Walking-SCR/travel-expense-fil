@@ -114,7 +114,7 @@ mkdir -p ~/.claude/skills/productivity
 cd ~/.claude/skills/productivity
 
 # 克隆仓库
-git clone https://github.com/Walking-SCR/travel-expense-fil.git
+git clone https://github.com/Walking-SCR/travel-expense-fill.git
 ```
 
 ### 使用方法
